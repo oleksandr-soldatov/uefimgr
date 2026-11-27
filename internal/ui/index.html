@@ -1,0 +1,1125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>uefimgr</title>
+<link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAB9ElEQVR4nOyXy0sCQRzHv7Pa0ts6JNmlew/q2DWIXrcOIQRlSAQdu/hHeOlYRAgdCqKDlyiJrkF0Msjo0KFTqYmpmPhAp9ndVnTLddN1t0Ofy75m5/ud78zAbziYjFX5oo+Bdn6bEDpFKZkkBHY0AaWIsr6CrK8bZPM7CUbld1L50Ds4sGABDkDIEFoBpS9FYCMVfrv4ZqDXYZ9j4gEYQJHSRdmEaMBms/VzHXyIjdwBIxCSyOTGU6lUnBNddLa5DBMXBckQ18WvCbfiIiSUTFWvBmAp4FHtwz/vRVMeBE2GmACF9GAksqaUAMFwrYYnS9Ujdfqrk3kI3UMrI6Nj5XtZk4PJmG7AWq+BMnIllbE2gukJiJuv32Gnao1mFmfF69X5JfTk/TVK/nYCu779H3/acm9CD4QE6i7Cetx5Z+u2mfDUnjpNBlzLK+L18PQYeqPJQCuEf2VADbV4tfC/DVUTkEeuRK8kdNmGtUwKaDEqFSQUERiMrCnVhKxuh8HImtIUUATZaphTNtISYcPrQdBEuSYs7FHQBAxC0BI0ywYS4cQzC8UNoyiV1iVNwCK/y6Y/HvnuzlvmaJpNUA9agXQ0cyYjsTP5laXyey6deWq38j5YLXm2SHLsQNnDqtcuNMHX4fSa9XWEbGE1GYtXldEEJvMJAAD//y4ejiIAAAAGSURBVAMAnVqx/aax6CkAAAAASUVORK5CYII=">
+<style>
+  /* A circuit board: dark solder mask, silkscreen lettering, copper for
+     anything staged but not yet written, one green LED, red for faults. */
+  :root {
+    color-scheme: dark;
+    --board: #0b110f;
+    --board-raised: #111916;
+    --board-lifted: #17211e;
+    --board-inset: #070c0a;
+    --trace: rgba(208, 232, 220, .09);
+    --trace-strong: rgba(208, 232, 220, .17);
+    --silk: #e7eeea;
+    --silk-2: #a8b7b0;
+    --silk-3: #7d8c85;
+    --silk-4: #55635c;
+    --copper: #e2a35c;
+    --copper-hi: #f1b876;
+    --copper-wash: rgba(226, 163, 92, .11);
+    --copper-edge: rgba(226, 163, 92, .42);
+    --copper-ink: #1c1205;
+    --led: #62d18c;
+    --fault: #f1766e;
+    --fault-wash: rgba(241, 118, 110, .10);
+    --fault-edge: rgba(241, 118, 110, .40);
+    --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+    --mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, "SF Mono", Menlo, monospace;
+    --r-1: 4px;
+    --r-2: 6px;
+    --r-3: 10px;
+    --ease: cubic-bezier(.23, 1, .32, 1);
+  }
+  * { box-sizing: border-box; }
+  /* An application window, not a document: the page itself never scrolls.
+     The boot sequence and the side rail scroll on their own when they do
+     not fit, and the bars stay where they are. */
+  html { height: 100%; overflow: hidden; -webkit-font-smoothing: antialiased; }
+  body {
+    margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none;
+    display: flex; flex-direction: column;
+    background: var(--board); color: var(--silk);
+    font: 13px/1.5 var(--sans);
+  }
+  body > * { flex: none; }
+  h1, h2, h3, p { margin: 0; }
+  h1 { font-size: 20px; font-weight: 600; letter-spacing: -.012em; line-height: 1.25; }
+  .label {
+    font: 600 11px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--silk-3);
+  }
+  .lede { color: var(--silk-2); max-width: 62ch; text-wrap: pretty; }
+  .mono { font-family: var(--mono); }
+  [hidden] { display: none !important; }
+  :focus-visible { outline: 2px solid var(--copper); outline-offset: 2px; }
+
+  /* Controls */
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .btn {
+    height: 30px; padding: 0 12px; border-radius: var(--r-2); border: 1px solid var(--trace-strong);
+    background: var(--board-raised); color: var(--silk); font-weight: 500; white-space: nowrap;
+    transition: background-color .12s, border-color .12s, color .12s, transform .12s var(--ease);
+  }
+  .btn:hover:not(:disabled) { background: var(--board-lifted); border-color: rgba(208, 232, 220, .28); }
+  .btn:active:not(:disabled) { transform: scale(.97); }
+  .btn:disabled { color: var(--silk-4); cursor: default; }
+  .btn.primary { background: var(--copper); border-color: var(--copper); color: var(--copper-ink); font-weight: 600; }
+  .btn.primary:hover:not(:disabled) { background: var(--copper-hi); border-color: var(--copper-hi); }
+  .btn.primary:disabled { background: transparent; border-color: var(--trace-strong); color: var(--silk-4); }
+  .btn.quiet { border-color: transparent; background: transparent; color: var(--silk-2); padding: 0 8px; }
+  .btn.quiet:hover:not(:disabled) { background: var(--board-lifted); border-color: transparent; color: var(--silk); }
+  .btn.quiet.danger:hover:not(:disabled) { background: var(--fault-wash); color: var(--fault); }
+  .btn.icon { width: 24px; height: 20px; padding: 0; display: grid; place-items: center; }
+  .btn.icon svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  input[type=text], input[type=number] {
+    width: 100%; height: 32px; padding: 0 10px; font: inherit; color: var(--silk);
+    background: var(--board-inset); border: 1px solid var(--trace-strong); border-radius: var(--r-2);
+  }
+  input[type=text].mono, input[type=number] { font-family: var(--mono); font-size: 12px; }
+  input::placeholder { color: var(--silk-4); }
+  input:focus-visible { outline-offset: 0; border-color: var(--copper); }
+
+  .switch { position: relative; display: inline-flex; flex: none; width: 32px; height: 18px; cursor: pointer; }
+  .switch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+  .switch span {
+    width: 100%; height: 100%; border-radius: 9px; background: var(--board-inset); border: 1px solid var(--trace-strong);
+    transition: background-color .14s, border-color .14s;
+  }
+  .switch span::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--silk-3); transition: transform .16s var(--ease), background-color .14s;
+  }
+  .switch input:checked + span { background: rgba(98, 209, 140, .16); border-color: rgba(98, 209, 140, .5); }
+  .switch input:checked + span::after { transform: translateX(14px); background: var(--led); }
+  .switch input:focus-visible + span { outline: 2px solid var(--copper); outline-offset: 2px; }
+  .switch input:disabled + span { opacity: .45; }
+  .switch input:disabled { cursor: default; }
+
+  .tag {
+    display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; height: 18px; border-radius: 3px;
+    border: 1px solid var(--trace-strong); color: var(--silk-2); font: 500 11px/1 var(--mono); white-space: nowrap;
+  }
+  .tag.led::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--led); }
+  .tag.copper { color: var(--copper); border-color: var(--copper-edge); }
+  .tag.fault { color: var(--fault); border-color: var(--fault-edge); }
+  .tag.dim { color: var(--silk-3); }
+
+  /* Top bar */
+  .bar {
+    display: flex; align-items: center; gap: 16px; height: 44px; padding: 0 28px;
+    border-bottom: 1px solid var(--trace);
+  }
+  .brand { font: 600 13px/1 var(--mono); letter-spacing: .02em; }
+  .brand small { margin-left: 10px; font: 400 12px/1 var(--sans); color: var(--silk-3); letter-spacing: 0; }
+  .bar-status { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+
+  .notice {
+    display: flex; gap: 12px; align-items: flex-start; margin: 16px auto 0; max-width: 1064px;
+    padding: 10px 12px 10px 14px; border: 1px solid var(--fault-edge); border-radius: var(--r-2);
+    background: var(--fault-wash); color: #ffd3cf; white-space: pre-wrap;
+  }
+  .notice p { flex: 1; }
+  .notice-wrap { padding: 0 28px; }
+
+  /* Layout */
+  .layout {
+    flex: 1 1 auto; min-height: 0; width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 22px;
+    display: grid; grid-template-columns: minmax(0, 1fr) 326px; grid-template-rows: minmax(0, 1fr); column-gap: 28px;
+  }
+  /* The side padding leaves room for focus rings, which a scrolling pane
+     would otherwise clip. */
+  .pane {
+    min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 28px 6px 32px;
+    scrollbar-width: thin; scrollbar-color: transparent transparent; scrollbar-gutter: stable;
+  }
+  .pane:hover, .pane:focus-within { scrollbar-color: var(--silk-4) transparent; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; align-content: start; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--silk-4) transparent; }
+    .pane { min-height: auto; overflow: visible; padding-bottom: 0; }
+    .pane + .pane { padding-bottom: 32px; }
+  }
+  .section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+  .section-head .lede { margin-top: 4px; }
+  .group-head { margin: 28px 0 10px; }
+  .group-head .lede { margin-top: 2px; font-size: 12px; color: var(--silk-3); }
+
+  .warnings {
+    list-style: none; margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--copper-edge);
+    border-radius: var(--r-2); background: var(--copper-wash); color: #f3d4ad; font-size: 12px;
+  }
+
+  /* The boot sequence ladder */
+  .ladder { list-style: none; margin: 0; padding: 0; border: 1px solid var(--trace); border-radius: var(--r-3); background: var(--board-raised); }
+  .slot {
+    position: relative; display: grid; grid-template-columns: 52px 24px minmax(0, 1fr) auto; align-items: center;
+    column-gap: 8px; padding: 12px 12px 12px 0; border-top: 1px solid var(--trace);
+  }
+  .slot:first-child { border-top: 0; border-radius: var(--r-3) var(--r-3) 0 0; }
+  .slot:last-child { border-radius: 0 0 var(--r-3) var(--r-3); }
+  .slot:only-child { border-radius: var(--r-3); }
+  /* the rail: a trace running down through every slot number */
+  .slot-no { position: relative; align-self: stretch; display: grid; place-items: center; cursor: grab; }
+  .slot-no::before {
+    content: ""; position: absolute; left: 50%; top: -13px; bottom: -13px; width: 1px; background: var(--trace-strong);
+  }
+  .slot:first-child .slot-no::before { top: 50%; }
+  .slot:last-child .slot-no::before { bottom: 50%; }
+  .slot-no b {
+    position: relative; min-width: 28px; padding: 2px 5px; border-radius: var(--r-1); text-align: center;
+    background: var(--board-inset); border: 1px solid var(--trace-strong);
+    font: 600 12px/1.4 var(--mono); font-variant-numeric: tabular-nums; color: var(--silk);
+  }
+  .slot.is-off .slot-no b, .slot.is-broken .slot-no b { color: var(--silk-4); border-style: dashed; }
+  .slot.is-first .slot-no b { border-color: rgba(98, 209, 140, .55); color: var(--led); }
+  .slot-move { display: grid; gap: 2px; opacity: .55; transition: opacity .12s; }
+  .slot:hover .slot-move, .slot:focus-within .slot-move { opacity: 1; }
+  .slot-move .btn { border-color: transparent; background: transparent; color: var(--silk-3); }
+  .slot-move .btn:hover:not(:disabled) { color: var(--silk); background: var(--board-lifted); }
+  .slot-move .btn:disabled { color: var(--silk-4); opacity: .5; }
+  .slot-body { min-width: 0; padding-left: 4px; }
+  .slot-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+  .slot-name { font-size: 14px; font-weight: 600; letter-spacing: -.005em; overflow-wrap: anywhere; }
+  .slot.is-off .slot-name { color: var(--silk-3); font-weight: 500; }
+  .slot-meta {
+    margin-top: 3px; display: flex; flex-wrap: wrap; gap: 0 14px; font: 12px/1.6 var(--mono); color: var(--silk-3);
+  }
+  .slot-meta .id { color: var(--silk-2); }
+  .slot-meta span { overflow-wrap: anywhere; }
+  .slot-error { margin-top: 4px; font-size: 12px; color: var(--fault); }
+  .slot-actions { display: flex; align-items: center; gap: 2px; padding-left: 8px; }
+  .slot-actions .switch { margin-right: 8px; }
+  .slot.is-pending { box-shadow: inset 2px 0 0 var(--copper); }
+  .slot.is-gone { box-shadow: inset 2px 0 0 var(--fault); }
+  .slot.is-gone .slot-name { text-decoration: line-through; color: var(--silk-3); font-weight: 500; }
+  .slot.dragging { opacity: .4; }
+  .slot.drop-before::after, .slot.drop-after::after {
+    content: ""; position: absolute; left: 0; right: 0; height: 2px; background: var(--copper);
+  }
+  .slot.drop-before::after { top: -1px; }
+  .slot.drop-after::after { bottom: -1px; }
+  .ladder.loose .slot { grid-template-columns: 52px minmax(0, 1fr) auto; }
+  .ladder.loose .slot-no { cursor: default; }
+  .ladder.loose .slot-no::before { display: none; }
+  .empty { padding: 32px 24px; color: var(--silk-3); text-align: center; }
+  .empty strong { display: block; margin-bottom: 4px; color: var(--silk-2); font-weight: 600; }
+  @media (max-width: 640px) {
+    .slot { grid-template-columns: 44px 24px minmax(0, 1fr); row-gap: 8px; }
+    .slot-actions { grid-column: 3; padding-left: 4px; flex-wrap: wrap; }
+  }
+
+  /* Side rail */
+  .rail { display: grid; gap: 28px; align-content: start; }
+  .rail section > .label { margin-bottom: 10px; }
+  .rail p { color: var(--silk-3); font-size: 12px; text-wrap: pretty; }
+  .setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--trace); }
+  .setting:first-of-type { border-top: 0; padding-top: 0; }
+  .setting > div { min-width: 0; }
+  .setting strong { display: block; font-weight: 500; overflow-wrap: anywhere; }
+  .setting small { display: block; color: var(--silk-3); font-size: 12px; }
+  .timeout { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .timeout input { width: 88px; }
+  .timeout span { color: var(--silk-2); }
+  .timeout .btn { margin-left: auto; }
+  .rail-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 12px; }
+  .backups { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--trace); }
+  .backups li { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--trace); }
+  .backups time { display: block; font-variant-numeric: tabular-nums; }
+  .backups small { display: block; color: var(--silk-3); font: 11px/1.5 var(--mono); }
+  .backups li > div { flex: 1; min-width: 0; }
+  .folder { margin-top: 10px; font: 11px/1.5 var(--mono); color: var(--silk-4); overflow-wrap: anywhere; }
+
+  /* Commit bar: staged writes wait here */
+  .commit {
+    position: relative; z-index: 5; background: var(--board-lifted);
+    border-top: 1px solid var(--copper-edge); animation: rise .2s var(--ease);
+  }
+  .commit-inner { display: flex; align-items: center; gap: 12px; max-width: 1120px; margin: 0 auto; padding: 12px 28px; }
+  .commit-count {
+    min-width: 28px; height: 28px; padding: 0 8px; display: grid; place-items: center; border-radius: var(--r-1);
+    background: var(--copper-wash); border: 1px solid var(--copper-edge); color: var(--copper);
+    font: 600 13px/1 var(--mono); font-variant-numeric: tabular-nums;
+  }
+  .commit-text { flex: 1; min-width: 0; }
+  .commit-text strong { display: block; font-weight: 600; }
+  .commit-text small { display: block; color: var(--silk-3); font-size: 12px; }
+  @keyframes rise { from { transform: translateY(100%); } }
+
+  /* Dialogs */
+  dialog {
+    width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; color: var(--silk);
+    background: var(--board-lifted); border: 1px solid var(--trace-strong); border-radius: 12px; overflow: hidden;
+  }
+  dialog[open] { display: flex; flex-direction: column; animation: surface .18s var(--ease); }
+  dialog form { display: flex; flex-direction: column; min-height: 0; }
+  dialog::backdrop { background: rgba(3, 7, 5, .7); }
+  @keyframes surface { from { opacity: 0; transform: scale(.97); } }
+  .dlg-head { padding: 20px 24px 0; }
+  .dlg-head h2 { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+  .dlg-head p { margin-top: 4px; color: var(--silk-2); }
+  .dlg-body { padding: 16px 24px 20px; overflow-y: auto; }
+  .dlg-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 24px; border-top: 1px solid var(--trace); background: var(--board-raised); }
+  .dlg-foot .spacer { flex: 1; }
+  .field { display: block; margin-bottom: 16px; }
+  .field > .label { display: block; margin-bottom: 6px; }
+  .field-note { margin-top: 6px; font-size: 12px; color: var(--silk-3); }
+  .choices { display: grid; gap: 6px; }
+  .choice {
+    display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 10px; align-items: start; padding: 8px 10px;
+    border: 1px solid var(--trace-strong); border-radius: var(--r-2); background: var(--board-raised); cursor: pointer;
+  }
+  .choice:has(input:checked) { border-color: var(--copper-edge); background: var(--copper-wash); }
+  .choice input { margin: 3px 0 0; accent-color: var(--copper); }
+  .choice strong { display: block; font-weight: 500; }
+  .choice small { display: block; font: 11px/1.5 var(--mono); color: var(--silk-3); overflow-wrap: anywhere; }
+  .path-row { display: flex; gap: 6px; }
+  .browser { margin-top: 8px; border: 1px solid var(--trace-strong); border-radius: var(--r-2); background: var(--board-inset); }
+  .crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 6px 8px; border-bottom: 1px solid var(--trace); font: 12px/1 var(--mono); color: var(--silk-3); }
+  .crumbs button { border: 0; background: none; padding: 3px 4px; border-radius: 3px; font-family: var(--mono); font-size: 12px; color: var(--silk-2); }
+  .crumbs button:hover { background: var(--board-lifted); color: var(--silk); }
+  .files { list-style: none; margin: 0; padding: 4px; max-height: 176px; overflow-y: auto; }
+  .files button {
+    display: flex; gap: 8px; width: 100%; padding: 5px 8px; border: 0; border-radius: var(--r-1); background: none;
+    text-align: left; font: 12px/1.5 var(--mono); color: var(--silk-2);
+  }
+  .files button:hover { background: var(--board-lifted); color: var(--silk); }
+  .files button.is-file { color: var(--silk); }
+  .files button i { font-style: normal; color: var(--silk-4); width: 28px; flex: none; }
+  .files .empty { padding: 12px; font-size: 12px; text-align: left; }
+  .checks { display: grid; gap: 8px; }
+  .check { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+  .check input { margin: 3px 0 0; accent-color: var(--copper); }
+  .form-error { margin-bottom: 16px; padding: 8px 10px; border: 1px solid var(--fault-edge); border-radius: var(--r-2); background: var(--fault-wash); color: #ffd3cf; }
+
+  .ledger { list-style: none; margin: 0; padding: 0; border: 1px solid var(--trace-strong); border-radius: var(--r-2); background: var(--board-inset); font: 12px/1.5 var(--mono); }
+  .ledger li { display: grid; grid-template-columns: 20px 58px 96px minmax(0, 1fr); gap: 8px; padding: 6px 10px; border-top: 1px solid var(--trace); }
+  .ledger li:first-child { border-top: 0; }
+  .ledger .n { color: var(--silk-4); text-align: right; font-variant-numeric: tabular-nums; }
+  .ledger .op { color: var(--copper); }
+  .ledger .op.delete { color: var(--fault); }
+  .ledger .detail { color: var(--silk-2); overflow-wrap: anywhere; }
+  .risks { margin-top: 16px; padding: 12px 14px; border: 1px solid var(--fault-edge); border-radius: var(--r-2); background: var(--fault-wash); }
+  .risks h3 { font-size: 13px; font-weight: 600; color: var(--fault); }
+  .risks ul { margin: 6px 0 12px; padding-left: 18px; color: #ffd3cf; }
+  .risks li + li { margin-top: 4px; }
+  .risks .check { color: var(--silk); font-weight: 500; }
+  .risks .check input { accent-color: var(--fault); }
+  .dlg-note { margin-top: 12px; font-size: 12px; color: var(--silk-3); overflow-wrap: anywhere; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 84px; z-index: 20; max-width: min(560px, 90vw); padding: 8px 14px;
+    transform: translate(-50%, 8px); opacity: 0; pointer-events: none; border-radius: var(--r-2);
+    background: var(--board-lifted); border: 1px solid var(--trace-strong); overflow-wrap: anywhere;
+    transition: opacity .16s, transform .2s var(--ease);
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">uefimgr<small>UEFI boot entries</small></div>
+  <div class="bar-status" id="status"></div>
+  <button class="btn quiet" id="reload" title="Read the firmware variables again">Reload</button>
+</header>
+
+<div class="notice-wrap">
+  <div class="notice" id="notice" role="alert" hidden>
+    <p id="notice-text"></p>
+    <button class="btn quiet" id="notice-close">Dismiss</button>
+  </div>
+</div>
+
+<main class="layout">
+  <div class="pane">
+    <div class="section-head">
+      <div>
+        <h1>Boot sequence</h1>
+        <p class="lede">On startup the firmware tries these from the top and starts the first one that works. Changes are staged here and written only when you confirm.</p>
+      </div>
+      <button class="btn primary" id="new-entry" disabled>New entry</button>
+    </div>
+    <ul class="warnings" id="warnings" hidden></ul>
+    <ol class="ladder" id="entries"><li class="empty">Reading firmware variables…</li></ol>
+
+    <div id="removed-wrap" hidden>
+      <div class="group-head"><h2 class="label">Will be deleted</h2></div>
+      <ul class="ladder loose" id="removed"></ul>
+    </div>
+
+    <div id="unordered-wrap" hidden>
+      <div class="group-head">
+        <h2 class="label">Not in the sequence</h2>
+        <p class="lede">These entries exist in firmware, but the boot sequence does not mention them, so they are never tried.</p>
+      </div>
+      <ul class="ladder loose" id="unordered"></ul>
+    </div>
+  </div>
+
+  <aside class="pane rail">
+    <section>
+      <h2 class="label">Next restart</h2>
+      <div class="setting">
+        <div><strong id="next-name">Follows the sequence</strong><small id="next-note">Use “Boot next” on an entry to start it once.</small></div>
+        <button class="btn" id="next-clear" hidden>Clear</button>
+      </div>
+      <div class="setting">
+        <div><strong>Open firmware setup</strong><small id="fw-note">Go straight to the firmware's settings screen.</small></div>
+        <label class="switch"><input type="checkbox" id="fw-toggle" aria-label="Open firmware setup on the next restart"><span></span></label>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="label">Menu timeout</h2>
+      <div class="timeout">
+        <input type="number" id="timeout" min="0" max="65535" step="1" placeholder="default" aria-label="Firmware boot menu timeout in seconds">
+        <span>seconds</span>
+        <button class="btn" id="timeout-clear">Use default</button>
+      </div>
+      <p>How long the firmware's own boot menu waits before continuing. Many systems ignore it.</p>
+    </section>
+
+    <section>
+      <h2 class="label">Backups</h2>
+      <p>The current configuration is saved before every write. Loading a backup stages it; nothing is written until you confirm.</p>
+      <div class="rail-actions">
+        <button class="btn" id="backup-now">Back up now</button>
+        <button class="btn" id="backup-file">Load file…</button>
+        <button class="btn" id="backup-open">Open folder</button>
+        <input type="file" id="backup-input" accept=".json,application/json" hidden>
+      </div>
+      <ul class="backups" id="backups"></ul>
+      <div class="folder" id="backup-dir"></div>
+    </section>
+  </aside>
+</main>
+
+<div class="commit" id="commit" hidden>
+  <div class="commit-inner">
+    <div class="commit-count" id="commit-count">0</div>
+    <div class="commit-text">
+      <strong id="commit-title"></strong>
+      <small>Nothing has been written to firmware yet.</small>
+    </div>
+    <button class="btn" id="discard">Discard</button>
+    <button class="btn primary" id="review">Review and write…</button>
+  </div>
+</div>
+
+<dialog id="entry-dialog" aria-labelledby="entry-title">
+  <form id="entry-form" method="dialog">
+    <div class="dlg-head"><h2 id="entry-title">New entry</h2><p id="entry-sub"></p></div>
+    <div class="dlg-body">
+      <div class="form-error" id="entry-error" role="alert" hidden></div>
+      <label class="field"><span class="label">Name</span>
+        <input type="text" id="f-name" maxlength="255" placeholder="Shown in the firmware boot menu" required>
+      </label>
+      <div id="f-target">
+        <div class="field">
+          <span class="label">Partition</span>
+          <div class="choices" id="f-partitions"></div>
+        </div>
+        <div class="field">
+          <label class="label" for="f-path">Loader file</label>
+          <div class="path-row">
+            <input type="text" class="mono" id="f-path" placeholder="\EFI\vendor\loader.efi" spellcheck="false" autocomplete="off">
+          </div>
+          <div class="browser" id="f-browser" hidden>
+            <div class="crumbs" id="f-crumbs"></div>
+            <ul class="files" id="f-files"></ul>
+          </div>
+          <p class="field-note" id="f-path-note"></p>
+        </div>
+      </div>
+      <p class="field-note" id="f-locked" hidden>This entry does not point at a file on a partition, so only its name can be changed here.</p>
+      <div class="checks" id="f-options">
+        <label class="check"><input type="checkbox" id="f-first"><span>Put it at the top of the sequence</span></label>
+        <label class="check"><input type="checkbox" id="f-inactive"><span>Create it disabled</span></label>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn" type="button" id="entry-cancel">Cancel</button>
+      <button class="btn primary" type="submit" id="entry-submit">Stage entry</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="review-dialog" aria-labelledby="review-title">
+  <div class="dlg-head">
+    <h2 id="review-title">Write to firmware</h2>
+    <p>These variables will be written in this order.</p>
+  </div>
+  <div class="dlg-body">
+    <div class="form-error" id="review-error" role="alert" hidden></div>
+    <ol class="ledger" id="ledger"></ol>
+    <div class="risks" id="risks" hidden>
+      <h3>This could stop the system from starting</h3>
+      <ul id="risk-list"></ul>
+      <label class="check"><input type="checkbox" id="ack"><span>I understand, write these changes anyway</span></label>
+    </div>
+    <p class="dlg-note" id="review-note"></p>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn" type="button" id="review-cancel">Cancel</button>
+    <button class="btn primary" type="button" id="review-write">Write</button>
+  </div>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const bridge = window.__uefimgr || null;
+
+  // In a browser the page talks HTTP and needs the per-run token from the
+  // address it was opened with. In the app window a bridge is injected.
+  let token = "";
+  if (!bridge) {
+    const fromUrl = new URLSearchParams(location.search).get("token");
+    try {
+      token = fromUrl || sessionStorage.getItem("uefimgr-token") || "";
+      if (fromUrl) {
+        sessionStorage.setItem("uefimgr-token", fromUrl);
+        history.replaceState(null, "", location.pathname);
+      }
+    } catch (_) { token = fromUrl || ""; }
+  }
+
+  async function call(method, params) {
+    if (bridge) return bridge.call(method, params || {});
+    if (!token) throw new Error("This page was opened without its session token. Use the address uefimgr printed when it started.");
+    const res = await fetch("/api/" + method, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Uefimgr-Token": token },
+      body: JSON.stringify(params || {}),
+    });
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (_) { /* not JSON */ }
+    if (!res.ok) throw new Error((data && data.error) || text || res.statusText);
+    return data;
+  }
+
+  let view = null;
+  let volumes = [];
+  let backups = [];
+
+  // Calls that change the staged configuration run one after another, in
+  // the order they were made, so a quick second click is never lost.
+  let queue = Promise.resolve();
+  function enqueue(fn) {
+    const p = queue.then(fn, fn);
+    queue = p.catch(() => {});
+    return p;
+  }
+
+  function el(tag, props, children) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (v === undefined || v === null || v === false) continue;
+      if (k === "class") n.className = v;
+      else if (k === "text") n.textContent = v;
+      else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+      else if (k === "disabled" || k === "checked") n[k] = true;
+      else n.setAttribute(k, v);
+    }
+    for (const c of children || []) if (c) n.append(c);
+    return n;
+  }
+
+  const hex4 = (n) => n.toString(16).toUpperCase().padStart(4, "0");
+  const bootName = (id) => "Boot" + hex4(id);
+  const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
+
+  function fmtSize(bytes) {
+    if (!bytes) return "";
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let i = 0, v = bytes;
+    while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+    return (v >= 10 || i === 0 ? Math.round(v) : v.toFixed(1)) + " " + units[i];
+  }
+
+  function fmtTime(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return iso;
+    return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  // Messages
+  let toastTimer;
+  function toast(msg) {
+    const t = $("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 4200);
+  }
+  function notice(msg) {
+    $("notice-text").textContent = msg || "";
+    $("notice").hidden = !msg;
+  }
+  $("notice-close").addEventListener("click", () => notice(""));
+
+  // Run one API call that returns a fresh view. On failure the page is
+  // redrawn from the last good view, which puts any flipped control back.
+  function act(method, params, done) {
+    return enqueue(async () => {
+      try {
+        const res = await call(method, params);
+        if (res && res.view) view = res.view;
+        notice("");
+        render();
+        if (done) toast(done);
+        return res;
+      } catch (e) {
+        notice(e.message || String(e));
+        render();
+        return null;
+      }
+    });
+  }
+
+  async function loadVolumes() {
+    try { volumes = (await call("volumes")).volumes || []; } catch (_) { volumes = []; }
+  }
+  async function loadBackups() {
+    try { backups = (await call("backups")).backups || []; } catch (_) { backups = []; }
+    renderBackups();
+  }
+  async function reload() {
+    await loadVolumes();
+    await act("state");
+    await loadBackups();
+  }
+
+  // Describing partitions
+  const volumeByGuid = (guid) => volumes.find((v) => guid && v.partitionGuid === guid) || null;
+
+  function volumeTitle(v) {
+    const where = v.mountPoints && v.mountPoints.length ? v.mountPoints.join(", ") : "no drive letter";
+    return (v.label || (v.isEsp ? "EFI system partition" : "Unlabeled volume")) + " — " + where;
+  }
+  function volumeDetail(v) {
+    const bits = [v.isEsp ? "EFI system partition" : v.fileSystem];
+    if (v.isEsp && v.fileSystem) bits.push(v.fileSystem);
+    if (v.disk >= 0) bits.push("disk " + v.disk + ", partition " + v.partition);
+    if (v.sizeBytes) bits.push(fmtSize(v.sizeBytes));
+    return bits.filter(Boolean).join(" · ");
+  }
+  function partitionOf(e) {
+    const v = volumeByGuid(e.partitionGuid);
+    if (v) return (v.label || (v.isEsp ? "ESP" : "volume")) + (v.disk >= 0 ? " · disk " + v.disk + " part " + v.partition : "");
+    if (e.partitionGuid) return "partition " + e.partitionGuid.slice(1, 9) + "…";
+    return "";
+  }
+
+  // Rendering
+  const ICON_UP = '<svg viewBox="0 0 10 10"><path d="M2 6.5 5 3.5 8 6.5"/></svg>';
+  const ICON_DOWN = '<svg viewBox="0 0 10 10"><path d="M2 3.5 5 6.5 8 3.5"/></svg>';
+
+  function iconButton(svg, label, onclick, disabled) {
+    const b = el("button", { class: "btn icon", type: "button", "aria-label": label, title: label, onclick, disabled });
+    b.innerHTML = svg;
+    return b;
+  }
+
+  function currentEntry(id) {
+    return view.current.entries.concat(view.current.unordered).find((e) => e.id === id) || null;
+  }
+
+  function changeTag(e) {
+    const before = currentEntry(e.id);
+    if (!before) return el("span", { class: "tag copper", text: "new" });
+    if (before.raw !== e.raw) return el("span", { class: "tag copper", text: "changed" });
+    if ((before.orderIndex < 0) !== (e.orderIndex < 0)) return el("span", { class: "tag copper", text: "changed" });
+    return null;
+  }
+
+  function entryBody(e, tags) {
+    const meta = [el("span", { class: "id", text: e.name })];
+    if (e.filePath) meta.push(el("span", { text: e.filePath }));
+    const part = partitionOf(e);
+    if (part) meta.push(el("span", { text: part }));
+    else if (!e.broken && e.devicePath && e.devicePath !== e.filePath) meta.push(el("span", { text: e.devicePath }));
+    if (e.extraPaths) meta.push(el("span", { text: "+" + plural(e.extraPaths, "extra path", "extra paths") }));
+    if (e.optionalDataLen) meta.push(el("span", { text: e.optionalDataLen + " B of loader options" }));
+    return el("div", { class: "slot-body" }, [
+      el("div", { class: "slot-title" }, [el("span", { class: "slot-name", text: e.description || "(no name)" }), ...tags]),
+      el("div", { class: "slot-meta" }, meta),
+      e.broken && e.error ? el("div", { class: "slot-error", text: e.error }) : null,
+    ]);
+  }
+
+  function renderEntries() {
+    const d = view.draft;
+    const list = $("entries");
+    list.textContent = "";
+    if (!d.entries.length) {
+      list.append(el("li", { class: "empty" }, [
+        el("strong", { text: "The boot sequence is empty" }),
+        document.createTextNode("With nothing listed, the firmware falls back to whatever it finds on its own. Add an entry to choose what starts."),
+      ]));
+    }
+    const firstIdx = d.entries.findIndex((e) => e.active && !e.broken);
+    d.entries.forEach((e, i) => {
+      const tags = [];
+      if (i === firstIdx) tags.push(el("span", { class: "tag dim", text: "tried first" }));
+      if (view.current.bootCurrent === e.id) tags.push(el("span", { class: "tag led", text: "started from this", title: "The entry this system booted from" }));
+      if (d.bootNext === e.id) tags.push(el("span", { class: "tag", text: "next restart only" }));
+      if (e.broken) tags.push(el("span", { class: "tag fault", text: e.raw ? "unrecognized" : "missing" }));
+      else if (!e.active) tags.push(el("span", { class: "tag dim", text: "disabled · skipped" }));
+      const changed = changeTag(e);
+      if (changed) tags.push(changed);
+
+      const actions = el("div", { class: "slot-actions" }, e.broken ? [
+        el("button", { class: "btn quiet danger", type: "button", text: "Delete", onclick: () => removeEntry(e) }),
+      ] : [
+        el("label", { class: "switch", title: e.active ? "Enabled" : "Disabled" }, [
+          el("input", { type: "checkbox", checked: e.active, "aria-label": "Enabled: " + e.description, onchange: (ev) => act("setActive", { id: e.id, active: ev.target.checked }) }),
+          el("span"),
+        ]),
+        el("button", { class: "btn quiet", type: "button", text: "Boot next", title: "Start this entry once, on the next restart", disabled: d.bootNext === e.id, onclick: () => act("setNext", { id: e.id }) }),
+        el("button", { class: "btn quiet", type: "button", text: "Edit", onclick: () => openEntryDialog(e) }),
+        el("button", { class: "btn quiet danger", type: "button", text: "Delete", onclick: () => removeEntry(e) }),
+      ]);
+
+      const handle = el("div", { class: "slot-no", title: "Drag to reorder" }, [el("b", { text: String(i + 1).padStart(2, "0") })]);
+      const li = el("li", {
+        class: "slot" + (!e.active && !e.broken ? " is-off" : "") + (e.broken ? " is-broken" : "") + (changed ? " is-pending" : "") + (i === firstIdx ? " is-first" : ""),
+        "data-id": e.id,
+      }, [
+        handle,
+        el("div", { class: "slot-move" }, [
+          iconButton(ICON_UP, "Move " + e.name + " up", () => move(i, i - 1), i === 0),
+          iconButton(ICON_DOWN, "Move " + e.name + " down", () => move(i, i + 1), i === d.entries.length - 1),
+        ]),
+        entryBody(e, tags),
+        actions,
+      ]);
+      wireDrag(li, handle, i);
+      list.append(li);
+    });
+
+    // Entries that the staged changes delete.
+    const kept = new Set(d.entries.concat(d.unordered).map((e) => e.id));
+    const gone = view.current.entries.concat(view.current.unordered).filter((e) => !kept.has(e.id));
+    $("removed-wrap").hidden = !gone.length;
+    const removed = $("removed");
+    removed.textContent = "";
+    for (const e of gone) {
+      removed.append(el("li", { class: "slot is-gone" }, [
+        el("div", { class: "slot-no" }, [el("b", { text: "—" })]),
+        entryBody(e, []),
+      ]));
+    }
+
+    $("unordered-wrap").hidden = !d.unordered.length;
+    const loose = $("unordered");
+    loose.textContent = "";
+    for (const e of d.unordered) {
+      const tags = [];
+      if (view.current.bootCurrent === e.id) tags.push(el("span", { class: "tag led", text: "started from this" }));
+      if (d.bootNext === e.id) tags.push(el("span", { class: "tag", text: "next restart only" }));
+      if (e.broken) tags.push(el("span", { class: "tag fault", text: "unrecognized" }));
+      else if (!e.active) tags.push(el("span", { class: "tag dim", text: "disabled" }));
+      const changed = changeTag(e);
+      if (changed) tags.push(changed);
+      loose.append(el("li", { class: "slot" + (changed ? " is-pending" : "") }, [
+        el("div", { class: "slot-no" }, [el("b", { text: "—" })]),
+        entryBody(e, tags),
+        el("div", { class: "slot-actions" }, [
+          el("button", { class: "btn quiet", type: "button", text: "Add to sequence", onclick: () => act("setOrder", { ids: d.order.concat([e.id]) }) }),
+          e.broken ? null : el("button", { class: "btn quiet", type: "button", text: "Edit", onclick: () => openEntryDialog(e) }),
+          el("button", { class: "btn quiet danger", type: "button", text: "Delete", onclick: () => removeEntry(e) }),
+        ]),
+      ]));
+    }
+  }
+
+  function move(from, to) {
+    const order = view.draft.order.slice();
+    if (to < 0 || to >= order.length || from === to) return;
+    const [id] = order.splice(from, 1);
+    order.splice(to, 0, id);
+    act("setOrder", { ids: order });
+  }
+
+  // Dragging starts only from the slot number, so text stays selectable.
+  let dragFrom = -1;
+  function wireDrag(li, handle, index) {
+    handle.addEventListener("pointerdown", () => { li.draggable = true; });
+    handle.addEventListener("pointerup", () => { li.draggable = false; });
+    li.addEventListener("dragstart", (ev) => {
+      dragFrom = index;
+      ev.dataTransfer.effectAllowed = "move";
+      ev.dataTransfer.setData("text/plain", String(index));
+      li.classList.add("dragging");
+    });
+    li.addEventListener("dragend", () => {
+      dragFrom = -1;
+      li.draggable = false;
+      document.querySelectorAll(".slot").forEach((s) => s.classList.remove("dragging", "drop-before", "drop-after"));
+    });
+    li.addEventListener("dragover", (ev) => {
+      if (dragFrom < 0 || dragFrom === index) return;
+      ev.preventDefault();
+      const r = li.getBoundingClientRect();
+      const after = ev.clientY > r.top + r.height / 2;
+      li.classList.toggle("drop-before", !after);
+      li.classList.toggle("drop-after", after);
+    });
+    li.addEventListener("dragleave", () => li.classList.remove("drop-before", "drop-after"));
+    li.addEventListener("drop", (ev) => {
+      if (dragFrom < 0 || dragFrom === index) return;
+      ev.preventDefault();
+      const after = li.classList.contains("drop-after");
+      let to = after ? index + 1 : index;
+      if (dragFrom < to) to--;
+      move(dragFrom, to);
+    });
+  }
+
+  function removeEntry(e) {
+    act("delete", { id: e.id }, e.name + " is staged for deletion");
+  }
+
+  function renderStatus() {
+    const s = $("status");
+    s.textContent = "";
+    if (view.simulated) s.append(el("span", { class: "tag copper", text: "simulation", title: view.current.store }));
+    else s.append(el("span", { class: "tag", text: "firmware", title: view.current.store }));
+    if (!view.simulated) {
+      s.append(view.elevated
+        ? el("span", { class: "tag led", text: "administrator" })
+        : el("span", { class: "tag fault", text: "not administrator" }));
+    }
+    s.append(el("span", { class: "tag dim", text: "v" + view.version }));
+  }
+
+  function renderRail() {
+    const d = view.draft;
+    const next = d.bootNext == null ? null : d.entries.concat(d.unordered).find((e) => e.id === d.bootNext);
+    $("next-name").textContent = d.bootNext == null ? "Follows the sequence" : bootName(d.bootNext) + (next ? " — " + next.description : "");
+    $("next-note").textContent = d.bootNext == null ? "Use “Boot next” on an entry to start it once." : "Starts once, then the sequence applies again.";
+    $("next-clear").hidden = d.bootNext == null;
+
+    const fw = $("fw-toggle");
+    fw.checked = d.firmwareUiRequested;
+    fw.disabled = !d.firmwareUiSupported && !d.firmwareUiRequested;
+    $("fw-note").textContent = fw.disabled
+      ? "This firmware does not accept the request."
+      : d.firmwareUiRequested ? "The next restart opens the firmware's settings screen." : "Go straight to the firmware's settings screen.";
+
+    const t = $("timeout");
+    if (document.activeElement !== t) t.value = d.timeout == null ? "" : String(d.timeout);
+    $("timeout-clear").disabled = d.timeout == null;
+    $("backup-dir").textContent = view.backupDir || "";
+    $("backup-now").disabled = !view.backupDir;
+    $("backup-open").hidden = !view.backupDir;
+  }
+
+  function renderBackups() {
+    const list = $("backups");
+    list.textContent = "";
+    if (!backups.length) {
+      list.append(el("li", {}, [el("div", {}, [el("small", { text: "No backups yet." })])]));
+      return;
+    }
+    for (const b of backups.slice(0, 8)) {
+      list.append(el("li", {}, [
+        el("div", {}, [
+          el("time", { datetime: b.time, text: fmtTime(b.time) }),
+          el("small", { text: b.error ? "unreadable" : (b.kind === "manual" ? "manual" : "before a write") + " · " + plural(b.entries, "entry", "entries"), title: b.error || b.name }),
+        ]),
+        el("button", { class: "btn quiet", type: "button", text: "Load", disabled: !!b.error, title: "Stage this backup", onclick: () => act("loadBackup", { name: b.name }, "Backup staged. Review it, then write.") }),
+      ]));
+    }
+    if (backups.length > 8) {
+      list.append(el("li", {}, [el("div", {}, [el("small", { text: "+" + (backups.length - 8) + " older in the folder" })])]));
+    }
+  }
+
+  function renderCommit() {
+    const n = view.plan.writes.length;
+    $("commit").hidden = n === 0;
+    $("commit-count").textContent = String(n);
+    $("commit-title").textContent = plural(n, "write staged", "writes staged") + (view.plan.risks.length ? " — needs a closer look" : "");
+  }
+
+  function render() {
+    if (!view) return;
+    renderStatus();
+    const w = $("warnings");
+    w.textContent = "";
+    const warnings = view.draft.warnings || [];
+    w.hidden = !warnings.length;
+    for (const msg of warnings) w.append(el("li", { text: msg }));
+    renderEntries();
+    renderRail();
+    renderCommit();
+    $("new-entry").disabled = false;
+  }
+
+  // Side rail controls
+  $("reload").addEventListener("click", reload);
+  $("next-clear").addEventListener("click", () => act("setNext", { id: null }));
+  $("fw-toggle").addEventListener("change", (ev) => act("setFirmwareUI", { on: ev.target.checked }));
+  $("timeout").addEventListener("change", (ev) => {
+    const raw = ev.target.value.trim();
+    const seconds = raw === "" ? null : Number(raw);
+    if (seconds !== null && (!Number.isInteger(seconds) || seconds < 0 || seconds > 65535)) {
+      notice("The timeout has to be a whole number of seconds from 0 to 65535.");
+      return;
+    }
+    ev.target.blur();
+    act("setTimeout", { seconds });
+  });
+  $("timeout-clear").addEventListener("click", () => act("setTimeout", { seconds: null }));
+  $("backup-now").addEventListener("click", async () => {
+    try {
+      const res = await call("backupNow");
+      backups = res.backups || [];
+      renderBackups();
+      toast("Saved " + res.path);
+    } catch (e) { notice(e.message || String(e)); }
+  });
+  $("backup-open").addEventListener("click", () => call("openBackups").catch((e) => notice(e.message || String(e))));
+  $("backup-file").addEventListener("click", () => $("backup-input").click());
+  $("backup-input").addEventListener("change", async (ev) => {
+    const f = ev.target.files[0];
+    ev.target.value = "";
+    if (!f) return;
+    const snapshot = await f.text();
+    act("loadSnapshot", { snapshot }, "Backup staged. Review it, then write.");
+  });
+
+  // Entry dialog
+  const entryDialog = $("entry-dialog");
+  let form = null;
+
+  // The partitions come from the "targets" call; a choice goes back as its key.
+  function choiceText(p) {
+    switch (p.kind) {
+      case "keep":
+        return { title: "Keep the current partition", detail: p.volume ? volumeTitle(p.volume) : (p.partitionGuid || p.devicePath) };
+      case "volume":
+        return { title: volumeTitle(p.volume), detail: volumeDetail(p.volume) };
+      default:
+        return { title: "Same partition as " + p.entryName + " — " + (p.entryDescription || "(no name)"), detail: p.partitionGuid + " · not readable from here" };
+    }
+  }
+
+  async function openEntryDialog(entry) {
+    let opts;
+    try {
+      opts = await enqueue(() => call("targets", entry ? { id: entry.id } : {}));
+    } catch (e) {
+      notice(e.message || String(e));
+      return;
+    }
+    if (entryDialog.open) return;
+    form = { entry: entry || null, choices: opts.partitions, choice: null, dir: "", locked: !opts.editable };
+    form.choice = form.choices[0] || null;
+    $("entry-title").textContent = entry ? "Edit " + entry.name : "New entry";
+    $("entry-sub").textContent = entry ? "The change is staged; firmware is not touched until you write." : "Point the firmware at a loader file on a partition it can read.";
+    $("entry-submit").textContent = entry ? "Stage changes" : "Stage entry";
+    $("entry-error").hidden = true;
+    $("f-name").value = entry ? entry.description : "";
+    $("f-path").value = entry ? (entry.filePath || "") : "";
+    $("f-first").checked = false;
+    $("f-inactive").checked = false;
+    $("f-options").hidden = !!entry;
+    const locked = form.locked;
+    $("f-target").hidden = locked;
+    $("f-locked").hidden = !locked;
+    if (locked) $("f-locked").textContent = opts.reason;
+    renderChoices();
+    entryDialog.showModal();
+    $("f-name").focus();
+    if (!locked) browseTo(startDir());
+  }
+
+  function startDir() {
+    const p = $("f-path").value.trim();
+    const cut = p.lastIndexOf("\\");
+    return cut > 0 ? p.slice(0, cut) : "\\EFI";
+  }
+
+  function renderChoices() {
+    const box = $("f-partitions");
+    box.textContent = "";
+    if (!form.choices.length) {
+      box.append(el("p", { class: "field-note", text: "No readable partition was found. An EFI system partition formatted as FAT is needed." }));
+    }
+    for (const c of form.choices) {
+      const text = choiceText(c);
+      box.append(el("label", { class: "choice" }, [
+        el("input", { type: "radio", name: "partition", value: c.key, checked: form.choice === c, onchange: () => { form.choice = c; browseTo("\\EFI"); } }),
+        el("div", {}, [el("strong", { text: text.title }), el("small", { text: text.detail })]),
+      ]));
+    }
+  }
+
+  async function browseTo(dir) {
+    const vol = form && form.choice && form.choice.volume;
+    const box = $("f-browser");
+    box.hidden = !vol;
+    $("f-path-note").textContent = vol ? "Pick a file below or type its path." : "This partition cannot be read from here, so type the path. It is not checked.";
+    if (!vol) return;
+    let entries;
+    try {
+      entries = (await call("browse", { volume: vol.id, dir })).entries;
+    } catch (e) {
+      if (dir !== "\\") return browseTo("\\");
+      entries = [];
+    }
+    if (!form || form.choice.volume !== vol) return;
+    form.dir = dir === "\\" ? "" : dir.replace(/\\+$/, "");
+
+    const crumbs = $("f-crumbs");
+    crumbs.textContent = "";
+    crumbs.append(el("button", { type: "button", text: vol.label || "root", onclick: () => browseTo("\\") }));
+    let acc = "";
+    for (const part of form.dir.split("\\").filter(Boolean)) {
+      acc += "\\" + part;
+      const target = acc;
+      crumbs.append(document.createTextNode("\\"), el("button", { type: "button", text: part, onclick: () => browseTo(target) }));
+    }
+
+    const files = $("f-files");
+    files.textContent = "";
+    if (!entries.length) files.append(el("li", { class: "empty", text: "No folders or .efi files here." }));
+    for (const it of entries) {
+      const full = form.dir + "\\" + it.name;
+      files.append(el("li", {}, [
+        el("button", {
+          type: "button", class: it.dir ? "" : "is-file",
+          onclick: () => { if (it.dir) browseTo(full); else { $("f-path").value = full; $("f-path").focus(); } },
+        }, [el("i", { text: it.dir ? "dir" : "efi" }), document.createTextNode(it.name)]),
+      ]));
+    }
+  }
+
+  $("entry-cancel").addEventListener("click", () => entryDialog.close());
+  entryDialog.addEventListener("close", () => { form = null; });
+  $("entry-form").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    if (!form || form.sending) return;
+    const params = { description: $("f-name").value, path: $("f-path").value, partition: form.choice ? form.choice.key : "" };
+    if (form.locked) { params.partition = ""; params.path = ""; }
+    let method = "create";
+    if (form.entry) {
+      method = "edit";
+      params.id = form.entry.id;
+    } else {
+      params.first = $("f-first").checked;
+      params.inactive = $("f-inactive").checked;
+    }
+    const sending = form;
+    sending.sending = true;
+    enqueue(async () => {
+      try {
+        const res = await call(method, params);
+        const unchanged = method === "edit" && JSON.stringify(res.view.plan.writes) === JSON.stringify(view.plan.writes);
+        view = res.view;
+        entryDialog.close();
+        notice("");
+        render();
+        toast(method === "create" ? res.name + " is staged"
+          : unchanged ? "Nothing to change in " + bootName(params.id)
+          : "Changes to " + bootName(params.id) + " are staged");
+      } catch (e) {
+        const box = $("entry-error");
+        box.textContent = e.message || String(e);
+        box.hidden = false;
+      } finally {
+        sending.sending = false;
+      }
+    });
+  });
+  $("new-entry").addEventListener("click", () => openEntryDialog(null));
+
+  // Review and write
+  const reviewDialog = $("review-dialog");
+  const OP_WORDS = { create: "create", update: "set", delete: "delete" };
+
+  function openReview() {
+    const plan = view.plan;
+    const ledger = $("ledger");
+    ledger.textContent = "";
+    plan.writes.forEach((w, i) => {
+      ledger.append(el("li", {}, [
+        el("span", { class: "n", text: String(i + 1) }),
+        el("span", { class: "op " + w.op, text: OP_WORDS[w.op] || w.op }),
+        el("span", { text: w.name }),
+        el("span", { class: "detail", text: w.detail || "" }),
+      ]));
+    });
+    const risky = plan.risks.length > 0;
+    $("risks").hidden = !risky;
+    const list = $("risk-list");
+    list.textContent = "";
+    for (const r of plan.risks) list.append(el("li", { text: r.message }));
+    $("ack").checked = false;
+    $("review-error").hidden = true;
+    $("review-note").textContent = view.backupDir
+      ? "The current configuration is saved to " + view.backupDir + " first. If that fails, nothing is written."
+      : "No backup folder is configured, so no backup will be saved.";
+    const btn = $("review-write");
+    btn.textContent = "Write " + plural(plan.writes.length, "change", "changes");
+    btn.disabled = risky;
+    reviewDialog.showModal();
+    $("review-cancel").focus();
+  }
+  $("ack").addEventListener("change", (ev) => { $("review-write").disabled = !ev.target.checked; });
+  $("review-cancel").addEventListener("click", () => reviewDialog.close());
+  $("review").addEventListener("click", openReview);
+  $("discard").addEventListener("click", () => act("discard", {}, "Staged changes discarded"));
+  $("review-write").addEventListener("click", () => {
+    const btn = $("review-write");
+    if (btn.disabled) return;
+    btn.disabled = true;
+    enqueue(async () => {
+      try {
+        const res = await call("apply", { acknowledge: $("ack").checked });
+        view = res.view;
+        reviewDialog.close();
+        render();
+        const warnings = res.applied.warnings || [];
+        if (warnings.length) notice("Written, but the firmware did not keep everything:\n" + warnings.join("\n"));
+        else notice("");
+        toast("Wrote " + plural(res.applied.written, "variable", "variables") + (res.applied.backup ? ". Previous configuration saved." : "."));
+        loadBackups();
+      } catch (e) {
+        const box = $("review-error");
+        box.textContent = e.message || String(e);
+        box.hidden = false;
+        btn.disabled = !$("risks").hidden && !$("ack").checked;
+        // Part of the plan may have been written; show what is left.
+        try { view = (await call("state")).view; render(); } catch (_) { /* keep the old view */ }
+      }
+    });
+  });
+
+  // Keep the picture fresh when the window comes back, and let the HTTP
+  // server know the page is still open.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && view && !entryDialog.open && !reviewDialog.open) act("state");
+  });
+  if (!bridge) setInterval(() => { call("ping").catch(() => {}); }, 20000);
+
+  reload();
+})();
+</script>
+</body>
+</html>

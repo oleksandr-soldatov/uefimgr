@@ -1,0 +1,6 @@
+dist/
+*.exe
+*.test
+uefimgr-backups/
+demo.json
+demo.json.tmp
